@@ -58,19 +58,37 @@ def test_changed_group_becomes_an_override():
 def test_compose_hides_hydra_node_and_reflects_selection():
     app = make_app()
     app.selection["db"] = "postgresql"
-    text, ok = app.compose_yaml(app.current_overrides())
-    assert ok
-    assert "postgresql" in text
-    assert not text.startswith("hydra:")
+    cfg, error = app.compose_config(app.current_overrides())
+    assert not error
+    assert cfg is not None
+    assert cfg.db.driver == "postgresql"
+    assert "hydra" not in cfg
 
 
 @pytest.mark.skipif(not EXAMPLE.exists(), reason="hydra examples not present")
 def test_bad_override_reports_error_instead_of_raising():
     app = make_app()
     app.extra = "db=nonexistent_option"
-    text, ok = app.compose_yaml(app.current_overrides())
-    assert not ok
-    assert text  # error text is shown in the pane
+    cfg, error = app.compose_config(app.current_overrides())
+    assert cfg is None
+    assert error  # error text is shown in the pane
+
+
+@pytest.mark.skipif(not EXAMPLE.exists(), reason="hydra examples not present")
+def test_outline_is_built_from_the_composed_config():
+    app = make_app()
+    rows, _ = app.compose_outline(app.current_overrides())
+    db = next(r for r in rows if r.label == "db")
+    assert db.children  # nested group is foldable, not flat text
+
+
+@pytest.mark.skipif(not EXAMPLE.exists(), reason="hydra examples not present")
+def test_bad_override_yields_no_outline_rows():
+    app = make_app()
+    app.extra = "db=nonexistent_option"
+    rows, error = app.compose_outline(app.current_overrides())
+    assert rows == ()
+    assert error
 
 
 @pytest.mark.skipif(not EXAMPLE.exists(), reason="hydra examples not present")
