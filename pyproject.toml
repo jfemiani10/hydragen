@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hydragen"
+dynamic = ["version"]
+description = "A terminal UI for exploring and launching Hydra configs"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+    { name = "jfemiani10" },
+]
+dependencies = [
+    "textual>=1.0",
+    "hydra-core>=1.4.0.dev0",
+]
+classifiers = [
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/jfemiani10/hydra/"
+
+[tool.setuptools.packages.find]
+include = ["hydra_plugins.*"]
+namespaces = true
+
+[tool.setuptools.dynamic]
+version = { attr = "hydra_plugins.hydragen.__version__" }
+
+[tool.setuptools.package-data]
+"hydra_plugins.hydragen" = ["py.typed"]
+
+[project.scripts]
+hydra-tui = "hydra_plugins.hydragen._app:launch_hydragen"
+

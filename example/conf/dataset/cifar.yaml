@@ -1,0 +1,3 @@
+name: cifar
+size: 50000
+classes: 10
