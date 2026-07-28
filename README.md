@@ -66,3 +66,7 @@ On Windows, run Hydragen from Windows Terminal. Textual renders poorly in the le
 | `m`        | Toggle `--multirun`                   |
 | `x`        | Clear the log pane                    |
 | `q`        | Quit                                  |
+
+## Acknowledgements
+
+This project was inspired by the original [hydra_tui](https://github.com/facebookresearch/hydra_tui) concept from Facebook Research. While we could not fork the original repository as it was not publicly available, we created Hydragen as an independent implementation inspired by that vision: a terminal UI for composing and launching Hydra configurations.
