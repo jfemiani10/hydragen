@@ -23,13 +23,13 @@ def main() -> None:
             raise SystemExit("hydragen: -m requires a module name")
 
         module_name = args[1]
-        # Don't force --multirun; let the TUI control it via the 'm' toggle.
-        # The launcher override must be added for Hydra to discover it.
-        sys.argv = [module_name, *args[2:], "hydra/launcher=hydragen"]
+        # Must include --multirun so Hydra invokes the launcher plugin.
+        # Put it before user overrides for proper argument parsing.
+        sys.argv = [module_name, "--multirun", *args[2:], "hydra/launcher=hydragen"]
         runpy.run_module(module_name, run_name="__main__")
     else:
         script_path = args[0]
-        # Don't force --multirun; let the TUI control it via the 'm' toggle.
-        # The launcher override must be added for Hydra to discover it.
-        sys.argv = [script_path, *args[1:], "hydra/launcher=hydragen"]
+        # Must include --multirun so Hydra invokes the launcher plugin.
+        # Put it before user overrides for proper argument parsing.
+        sys.argv = [script_path, "--multirun", *args[1:], "hydra/launcher=hydragen"]
         runpy.run_path(script_path, run_name="__main__")
