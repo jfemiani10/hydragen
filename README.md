@@ -69,4 +69,4 @@ On Windows, run Hydragen from Windows Terminal. Textual renders poorly in the le
 
 ## Acknowledgements
 
-This project was inspired by the original [hydra_tui](https://github.com/facebookresearch/hydra_tui) concept from Facebook Research. While we could not fork the original repository as it was not publicly available, we created Hydragen as an independent implementation inspired by that vision: a terminal UI for composing and launching Hydra configurations.
+This project was inspired by the original [hydra-tui](https://pypi.org/project/hydra-tui/) package by [Alex Kovrigin](https://pypi.org/user/alexkovrigin/). While we could not fork or run the original package, we created Hydragen as an independent implementation inspired by that vision: a terminal UI for composing and launching Hydra configurations.
