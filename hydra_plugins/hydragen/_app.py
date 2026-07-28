@@ -21,6 +21,7 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.widget import Widget
 from textual.widgets import (
     Footer,
     Header,
@@ -159,6 +160,7 @@ class Hydragen(App):  # type: ignore[misc]
         # expanded one) keeps this empty while the tree is fully open.
         self._collapsed: set[ConfigPath] = set()
         self._rebuilding = False
+        self._focus_before_config: Widget | None = None
 
         # Ask Hydra which groups exist and which option each one resolved to.
         self.groups: list[str] = [g for g in sorted(config_loader.list_groups("")) if g != "hydra"]
@@ -339,7 +341,24 @@ class Hydragen(App):  # type: ignore[misc]
         self.refresh_config()
 
     def action_focus_config(self) -> None:
-        self.query_one("#cfgpane", ConfigTree).focus()
+        """Toggle between the config outline and wherever focus was before it.
+
+        The sidebar contributes one tab stop per config group, so tabbing to the
+        outline and back gets long in a project with many groups.
+        """
+        tree = self.query_one("#cfgpane", ConfigTree)
+        if self.focused is tree:
+            target = self._focus_before_config
+            if target is None or not target.is_attached:
+                target = self._first_group_list()
+            if target is not None:
+                target.focus()
+        elif tree.display:  # nothing to focus while the error pane is up
+            self._focus_before_config = self.focused
+            tree.focus()
+
+    def _first_group_list(self) -> ListView | None:
+        return self.query_one(f"#g-{self.groups[0]}", ListView) if self.groups else None
 
     def action_clear_log(self) -> None:
         self.query_one("#log", RichLog).clear()
