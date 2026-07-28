@@ -50,7 +50,6 @@ def test_cli_runs_script_with_launcher(monkeypatch: pytest.MonkeyPatch) -> None:
             [
                 "example/my_app.py",
                 "model=cnn",
-                "--multirun",
                 "hydra/launcher=hydragen",
             ],
         ),
@@ -85,7 +84,6 @@ def test_cli_runs_module_with_launcher(monkeypatch: pytest.MonkeyPatch) -> None:
             [
                 "maptrace.segmentation.train",
                 "model=unet",
-                "--multirun",
                 "hydra/launcher=hydragen",
             ],
         ),

@@ -19,7 +19,7 @@ from omegaconf import DictConfig, OmegaConf, open_dict
 from rich.syntax import Syntax
 from textual import work
 from textual.app import App, ComposeResult
-from textual.binding import Binding
+from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import (
     Footer,
@@ -51,7 +51,7 @@ class Hydragen(App):  # type: ignore[misc]
     Input { margin: 0 1; }
     """
 
-    BINDINGS: ClassVar[list[Binding]] = [
+    BINDINGS: ClassVar[list[BindingType]] = [
         Binding("r", "run_job", "Run"),
         Binding("m", "toggle_multirun", "Multirun"),
         Binding("x", "clear_log", "Clear log"),
