@@ -136,3 +136,44 @@ def test_cli_passes_multiple_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
             ],
         ),
     ]
+
+
+def test_cli_module_passes_multiple_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression test for https://github.com/jfemiani10/hydragen/issues/1.
+
+    Ensure module mode preserves multiple user overrides and places --multirun
+    before them so Hydra invokes the custom launcher.
+    """
+    calls = []
+
+    def fake_register() -> None:
+        calls.append("register")
+
+    def fake_run_module(module_name: str, run_name: str) -> None:
+        calls.append(("run_module", module_name, run_name, list(_cli.sys.argv)))
+
+    monkeypatch.setattr(
+        _cli.sys,
+        "argv",
+        ["hydragen", "-m", "maptrace.segmentation.train", "model=unet", "dataset=imagenet"],
+    )
+    monkeypatch.setattr(_cli, "register_launcher", fake_register)
+    monkeypatch.setattr(_cli.runpy, "run_module", fake_run_module)
+
+    _cli.main()
+
+    assert calls == [
+        "register",
+        (
+            "run_module",
+            "maptrace.segmentation.train",
+            "__main__",
+            [
+                "maptrace.segmentation.train",
+                "--multirun",
+                "model=unet",
+                "dataset=imagenet",
+                "hydra/launcher=hydragen",
+            ],
+        ),
+    ]
