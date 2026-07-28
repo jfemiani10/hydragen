@@ -63,7 +63,7 @@ On Windows, run Hydragen from Windows Terminal. Textual renders poorly in the le
 | Key        | Action                                |
 | ---------- | ------------------------------------- |
 | Arrow keys | Change the selected option in a group |
-| `c`        | Focus the resolved config outline     |
+| `c`        | Jump to the resolved config outline, and back again |
 | `↑` / `↓`  | Move through the outline (once focused) |
 | `→`        | Expand the selected config node       |
 | `←`        | Collapse the selected config node     |
