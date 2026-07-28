@@ -28,6 +28,15 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/jfemiani10/hydra/"
 
+[project.optional-dependencies]
+dev = [
+    "pre-commit>=4.0",
+    "pytest>=8.0",
+    "ruff>=0.6.0",
+    "vulture>=2.11",
+    "pylint>=3.0",
+]
+
 [tool.setuptools.packages.find]
 include = ["hydra_plugins.*"]
 namespaces = true
@@ -39,5 +48,22 @@ version = { attr = "hydra_plugins.hydragen.__version__" }
 "hydra_plugins.hydragen" = ["py.typed"]
 
 [project.scripts]
-hydra-tui = "hydra_plugins.hydragen._app:launch_hydragen"
+hydragen = "hydra_plugins.hydragen._cli:main"
 
+[tool.ruff]
+line-length = 180
+force-exclude = true
+
+[tool.ruff.lint]
+exclude = [
+    "vulture_whitelist.py",
+]
+
+ignore = [
+    "E501",  # line too long
+]
+
+[tool.ruff.format]
+exclude = [
+    "vulture_whitelist.py",
+]

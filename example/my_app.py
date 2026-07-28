@@ -1,10 +1,11 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
-"""Self-contained example for hydra-tui.
+"""Self-contained example for Hydragen.
 
-    python my_app.py --tui        # open the terminal UI
-    python my_app.py              # run normally
-    python my_app.py model=cnn    # the UI just drives these overrides
+hydragen my_app.py            # open the terminal UI
+python my_app.py              # run normally
+python my_app.py model=cnn    # the UI just drives these overrides
 """
+
 import logging
 
 import hydra

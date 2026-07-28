@@ -1,14 +1,14 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 """hydragen: a terminal UI for any Hydra application.
 
-Hydra core calls :func:`launch_hydragen` when an app is run with ``--tui``. Keeping
-the implementation here (rather than in hydra core) means the core patch stays
-tiny and Textual never becomes a hydra-core dependency.
+Hydra core calls :func:`launch_hydragen` through its patched integration point.
+Keeping the implementation here (rather than in hydra core) means the core
+patch stays tiny and Textual never becomes a hydra-core dependency.
 """
 
 __version__ = "0.1.0"
 
-__all__ = ["launch_hydragen", "__version__"]
+__all__ = ["__version__", "launch_hydragen"]
 
 
 def launch_hydragen(*args, **kwargs):  # type: ignore[no-untyped-def]

@@ -2,101 +2,48 @@
 
 A terminal UI for exploring and launching [Hydra](https://hydra.cc) configurations.
 
+Hydragen provides a terminal UI experience for Hydra applications while
+remaining a separate package from Hydra itself.
 
+## Install
 
-Hydragen was inspired by the idea behind
-[hydra-tui](https://pypi.org/project/hydra-tui/). When we began this project,
-however, we could not locate a source repository suitable to fork or get the
-available package running successfully with our Hydra applications. Hydragen
-is therefore an independent implementation, not a fork of `hydra-tui`.
-
-## Setup from a fresh clone
-
-The `--tui` flag currently exists only on the companion Hydra fork, so both repositories must be installed in the same Python environment.
-
-Building Hydra from source requires Java because its configuration-override grammar is generated with ANTLR at build time. The ANTLR JAR is vendored in `build_helpers/bin/`.
-
-Verify that Java is available:
+For regular use, install directly from GitHub:
 
 ```bash
-java -version
+pip install "git+https://github.com/jfemiani10/hydragen.git@main"
 ```
 
-### Windows
+Hydra is installed automatically as a dependency.
 
-Enable long paths before cloning Hydra:
+## Development
 
-```bash
-git config --global core.longpaths true
-```
-
-Hydra contains test fixtures whose paths exceed the traditional 260-character Windows `MAX_PATH` limit. Cloning into a short directory such as `C:\src` also helps.
-
-If a clone already failed with `Filename too long`, enable long paths and restore the missing files:
+Clone and install with development dependencies:
 
 ```bash
-git restore --source=HEAD :/
-```
-
-### Install Hydra and Hydragen
-
-Clone both repositories into the same parent directory:
-
-```bash
-git clone -b tui https://github.com/jfemiani10/hydra.git
 git clone https://github.com/jfemiani10/hydragen.git
+cd hydragen
+pip install -e ".[dev]"
 ```
 
-Create and activate a virtual environment:
+Enable local hooks:
 
 ```bash
-python -m venv .venv
-```
-
-Linux or macOS:
-
-```bash
-source .venv/bin/activate
-```
-
-Windows:
-
-```powershell
-.venv\Scripts\activate
-```
-
-Install the patched Hydra fork and the standalone Hydragen plugin:
-
-```bash
-pip install -r hydra/requirements/dev.txt
-pip install -e ./hydra
-pip install -e ./hydragen
-```
-
-Verify that the patched Hydra installation provides `--tui`:
-
-```bash
-python -c "from hydra._internal.utils import get_args_parser; print('--tui' in [o for a in get_args_parser()._actions for o in a.option_strings])"
-```
-
-The result should be:
-
-```text
-True
+pre-commit install
+pre-commit run --all-files
 ```
 
 ## Try it
 
-Hydragen includes a self-contained example:
+Run the example app with:
 
 ```bash
-python hydragen/example/my_app.py --tui
+hydragen example/my_app.py
 ```
 
-It also works with Hydra’s existing examples without modifying the applications:
+You can also pass Hydra overrides:
 
 ```bash
-python hydra/examples/tutorials/basic/your_first_hydra_app/6_composition/my_app.py --tui
+hydragen example/my_app.py model=cnn dataset=cifar
 ```
 
 On Windows, run Hydragen from Windows Terminal. Textual renders poorly in the legacy console host.

@@ -1,5 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
-"""The Textual application behind ``--tui``.
+"""The Textual application used by Hydragen.
 
 Everything shown is derived from the running app's own ``ConfigLoader``, so the
 TUI adapts to any Hydra project: groups, options and the initial selection all
@@ -8,13 +8,14 @@ come from Hydra itself rather than from hardcoded knowledge of a project.
 
 from __future__ import annotations
 
+import contextlib
 import subprocess
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, ClassVar
 
 from hydra.core.config_loader import ConfigLoader
-from hydra.types import RunMode
-from omegaconf import OmegaConf, open_dict
+from hydra.types import HydraContext, RunMode
+from omegaconf import DictConfig, OmegaConf, open_dict
 from rich.syntax import Syntax
 from textual import work
 from textual.app import App, ComposeResult
@@ -49,7 +50,7 @@ class Hydragen(App):  # type: ignore[misc]
     Input { margin: 0 1; }
     """
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list[tuple[str, str, str]]] = [
         ("r", "run_job", "Run"),
         ("m", "toggle_multirun", "Multirun"),
         ("x", "clear_log", "Clear log"),
@@ -59,8 +60,8 @@ class Hydragen(App):  # type: ignore[misc]
     def __init__(
         self,
         config_loader: ConfigLoader,
-        config_name: Optional[str],
-        overrides: List[str],
+        config_name: str | None,
+        overrides: list[str],
         app_path: str,
     ) -> None:
         super().__init__()
@@ -72,23 +73,19 @@ class Hydragen(App):  # type: ignore[misc]
         self.extra = ""
 
         # Ask Hydra which groups exist and which option each one resolved to.
-        self.groups: List[str] = [
-            g for g in sorted(config_loader.list_groups("")) if g != "hydra"
-        ]
-        self.choices: Dict[str, Any] = {}
-        try:
-            cfg = config_loader.load_configuration(
-                config_name=config_name, overrides=self.base_overrides, run_mode=RunMode.RUN
-            )
-            self.choices = dict(cfg.hydra.runtime.choices)
-        except Exception:  # noqa: BLE001 - a broken base config shouldn't block the UI
-            pass
+        self.groups: list[str] = [g for g in sorted(config_loader.list_groups("")) if g != "hydra"]
+        cfg = config_loader.load_configuration(
+            config_name=config_name,
+            overrides=self.base_overrides,
+            run_mode=RunMode.RUN,
+        )
+        self.choices: dict[str, Any] = dict(cfg.hydra.runtime.choices)
 
-        self.options: Dict[str, List[str]] = {}
-        self.selection: Dict[str, str] = {}
+        self.options: dict[str, list[str]] = {}
+        self.selection: dict[str, str] = {}
         # A group already in the defaults list is overridden as `group=opt`;
         # anything else has to be appended with `+group=opt`.
-        self.in_defaults: Dict[str, bool] = {}
+        self.in_defaults: dict[str, bool] = {}
         for group in self.groups:
             opts = sorted(config_loader.get_group_options(group))
             opts = self._hide_schema_configs(opts)
@@ -103,7 +100,7 @@ class Hydragen(App):  # type: ignore[misc]
             self.selection[group] = chosen if chosen in opts else opts[0]
 
     @staticmethod
-    def _hide_schema_configs(opts: List[str]) -> List[str]:
+    def _hide_schema_configs(opts: list[str]) -> list[str]:
         """Drop structured-config schemas from the picker.
 
         Hydra's convention (and its own docs) is to register a group's schema in
@@ -116,7 +113,7 @@ class Hydragen(App):  # type: ignore[misc]
 
     # --- composition ------------------------------------------------------
 
-    def current_overrides(self) -> List[str]:
+    def current_overrides(self) -> list[str]:
         out = list(self.base_overrides)
         for group in self.groups:
             value = self.selection[group]
@@ -128,7 +125,7 @@ class Hydragen(App):  # type: ignore[misc]
         out.extend(self.extra.split())
         return out
 
-    def compose_yaml(self, overrides: List[str]) -> Tuple[str, bool]:
+    def compose_yaml(self, overrides: list[str]) -> tuple[str, bool]:
         try:
             cfg = self.config_loader.load_configuration(
                 config_name=self.config_name,
@@ -177,9 +174,7 @@ class Hydragen(App):  # type: ignore[misc]
             pane.update(f"compose failed\n\n{text}")
         flag = " --multirun" if self.multirun else ""
         app_name = self.app_path.replace("\\", "/").rsplit("/", 1)[-1]
-        self.query_one("#cmdline", Static).update(
-            f"$ python {app_name}{flag} " + " ".join(overrides)
-        )
+        self.query_one("#cmdline", Static).update(f"$ python {app_name}{flag} " + " ".join(overrides))
 
     # --- events -----------------------------------------------------------
 
@@ -214,7 +209,7 @@ class Hydragen(App):  # type: ignore[misc]
         self.run_job(cmd)
 
     @work(thread=True, exclusive=True)
-    def run_job(self, cmd: List[str]) -> None:
+    def run_job(self, cmd: list[str]) -> None:
         log = self.query_one("#log", RichLog)
         try:
             proc = subprocess.Popen(
@@ -236,14 +231,42 @@ class Hydragen(App):  # type: ignore[misc]
 
 def launch_hydragen(
     config_loader: ConfigLoader,
-    config_name: Optional[str],
-    overrides: List[str],
-    app_path: Optional[str] = None,
+    config_name: str | None,
+    overrides: list[str],
+    app_path: str | None = None,
 ) -> None:
-    """Entry point invoked by hydra core for ``--tui``."""
+    """Entry point invoked by hydra core through the patched integration path."""
     Hydragen(
         config_loader=config_loader,
         config_name=config_name,
         overrides=overrides,
         app_path=app_path or sys.argv[0],
     ).run()
+
+
+def run_tui(
+    *,
+    hydra_context: HydraContext,
+    config: DictConfig,
+    overrides: list[str],
+) -> None:
+    """Launch the Hydragen UI from a Hydra launcher plugin."""
+    filtered_overrides = [ov for ov in overrides if ov not in {"hydra/launcher=hydragen", "hydra.mode=MULTIRUN"}]
+
+    config_name: str | None = None
+    # Hydra schema differs across versions; config_name may not exist.
+    with contextlib.suppress(AttributeError):
+        config_name = config.hydra.job.config_name
+
+    app = Hydragen(
+        config_loader=hydra_context.config_loader,
+        config_name=config_name,
+        overrides=filtered_overrides,
+        app_path=sys.argv[0],
+    )
+
+    # Hydra mode schema may not exist; default to RUN mode.
+    with contextlib.suppress(AttributeError):
+        app.multirun = str(config.hydra.mode).upper().endswith("MULTIRUN")
+
+    app.run()

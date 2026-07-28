@@ -1,9 +1,10 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
-"""Tests for hydra-tui.
+"""Tests for Hydragen.
 
 The TUI derives everything from a ConfigLoader, so these build a loader over
 hydra's own example configs and assert the UI adapts to them.
 """
+
 from pathlib import Path
 
 import pytest
@@ -13,15 +14,7 @@ from hydra._internal.utils import create_config_search_path
 from hydra_plugins.hydragen._app import NONE, Hydragen
 
 # hydra's 6_composition example: groups db / schema / ui
-EXAMPLE = (
-    Path(__file__).resolve().parents[3]
-    / "examples"
-    / "tutorials"
-    / "basic"
-    / "your_first_hydra_app"
-    / "6_composition"
-    / "conf"
-)
+EXAMPLE = Path(__file__).resolve().parents[3] / "examples" / "tutorials" / "basic" / "your_first_hydra_app" / "6_composition" / "conf"
 
 
 def make_app(overrides=None):
