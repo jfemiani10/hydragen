@@ -11,16 +11,17 @@ from __future__ import annotations
 import contextlib
 import subprocess
 import sys
+from dataclasses import dataclass, field
 from typing import Any, ClassVar
 
 from hydra.core.config_loader import ConfigLoader
 from hydra.types import HydraContext, RunMode
 from omegaconf import DictConfig, OmegaConf, open_dict
-from rich.syntax import Syntax
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.widget import Widget
 from textual.widgets import (
     Footer,
     Header,
@@ -30,9 +31,90 @@ from textual.widgets import (
     ListView,
     RichLog,
     Static,
+    Tree,
 )
+from textual.widgets.tree import TreeNode
 
 NONE = "(none)"
+
+# Path from the config root to a node, used as a stable key for fold state.
+ConfigPath = tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class Outline:
+    """One row of the resolved-config outline.
+
+    Deliberately free of any Textual types so the tree shape can be built and
+    tested without standing up an app.
+    """
+
+    label: str
+    path: ConfigPath
+    children: tuple[Outline, ...] = field(default_factory=tuple)
+
+
+def _format_scalar(value: Any) -> str:
+    """Render a leaf value the way the YAML view used to."""
+    return "null" if value is None else str(value)
+
+
+def build_outline(data: Any, parent: ConfigPath = ()) -> tuple[Outline, ...]:
+    """Turn a plain container (from ``OmegaConf.to_container``) into outline rows.
+
+    Mappings and sequences become branches that can be folded; everything else
+    becomes a ``key: value`` leaf.
+    """
+    if isinstance(data, dict):
+        items: list[tuple[str, Any]] = [(str(k), v) for k, v in data.items()]
+    elif isinstance(data, list):
+        items = [(f"[{i}]", v) for i, v in enumerate(data)]
+    else:
+        return ()
+
+    rows = []
+    for key, value in items:
+        path = (*parent, key)
+        if isinstance(value, dict) and not value:
+            rows.append(Outline(f"{key}: {{}}", path))  # nothing to fold into
+        elif isinstance(value, list) and not value:
+            rows.append(Outline(f"{key}: []", path))
+        elif isinstance(value, (dict, list)):
+            rows.append(Outline(key, path, build_outline(value, path)))
+        else:
+            rows.append(Outline(f"{key}: {_format_scalar(value)}", path))
+    return tuple(rows)
+
+
+class ConfigTree(Tree[ConfigPath]):  # type: ignore[misc]
+    """Outline tree with the arrow-key folding people expect from an outliner.
+
+    Textual's ``Tree`` only binds ``space`` to toggle a node, so left/right are
+    added here.
+    """
+
+    BINDINGS: ClassVar[list[Binding]] = [
+        Binding("right", "expand_node", "Expand", show=False),
+        Binding("left", "collapse_node", "Collapse", show=False),
+    ]
+
+    def action_expand_node(self) -> None:
+        node = self.cursor_node
+        if node is None or not node.allow_expand:
+            return
+        if node.is_expanded:
+            self.action_cursor_down()  # already open, step into the first child
+        else:
+            node.expand()
+
+    def action_collapse_node(self) -> None:
+        node = self.cursor_node
+        if node is None:
+            return
+        if node.allow_expand and node.is_expanded:
+            node.collapse()
+        else:
+            self.action_cursor_parent()
 
 
 class Hydragen(App):  # type: ignore[misc]
@@ -46,16 +128,18 @@ class Hydragen(App):  # type: ignore[misc]
     .grouplabel { color: $accent; text-style: bold; padding: 0 1; }
     #right { width: 1fr; }
     #cfgpane { height: 1fr; border: round $primary; padding: 0 1; }
+    #cfgerror { height: 1fr; border: round $error; padding: 0 1; }
     #cmdline { color: $success; padding: 0 1; height: auto; }
     #log { height: 14; border: round $primary; }
     Input { margin: 0 1; }
     """
 
-    BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("r", "run_job", "Run"),
-        Binding("m", "toggle_multirun", "Multirun"),
-        Binding("x", "clear_log", "Clear log"),
-        Binding("q", "quit", "Quit"),
+    BINDINGS: ClassVar[list[tuple[str, str, str]]] = [
+        ("r", "run_job", "Run"),
+        ("c", "focus_config", "Config"),
+        ("m", "toggle_multirun", "Multirun"),
+        ("x", "clear_log", "Clear log"),
+        ("q", "quit", "Quit"),
     ]
 
     def __init__(
@@ -72,6 +156,11 @@ class Hydragen(App):  # type: ignore[misc]
         self.app_path = app_path
         self.multirun = False
         self.extra = ""
+        # Paths the user folded shut. Tracking the collapsed set (rather than the
+        # expanded one) keeps this empty while the tree is fully open.
+        self._collapsed: set[ConfigPath] = set()
+        self._rebuilding = False
+        self._focus_before_config: Widget | None = None
 
         # Ask Hydra which groups exist and which option each one resolved to.
         self.groups: list[str] = [g for g in sorted(config_loader.list_groups("")) if g != "hydra"]
@@ -126,7 +215,12 @@ class Hydragen(App):  # type: ignore[misc]
         out.extend(self.extra.split())
         return out
 
-    def compose_yaml(self, overrides: list[str]) -> tuple[str, bool]:
+    def compose_config(self, overrides: list[str]) -> tuple[DictConfig | None, str]:
+        """Compose the job config for ``overrides``.
+
+        Returns ``(cfg, "")`` on success and ``(None, error_text)`` on failure,
+        so compose errors reach the UI instead of taking the app down.
+        """
         try:
             cfg = self.config_loader.load_configuration(
                 config_name=self.config_name,
@@ -136,9 +230,18 @@ class Hydragen(App):  # type: ignore[misc]
             cfg = cfg.copy()
             with open_dict(cfg):
                 cfg.pop("hydra", None)  # show the job config, like --cfg job
-            return OmegaConf.to_yaml(cfg), True
+            return cfg, ""
         except Exception as exc:  # noqa: BLE001 - surface compose errors in the pane
-            return f"{type(exc).__name__}\n\n{exc}", False
+            return None, f"{type(exc).__name__}\n\n{exc}"
+
+    def compose_outline(self, overrides: list[str]) -> tuple[tuple[Outline, ...], str]:
+        """Compose ``overrides`` and shape the result into outline rows."""
+        cfg, error = self.compose_config(overrides)
+        if cfg is None:
+            return (), error
+        # resolve=False keeps ${...} interpolations rendered literally, matching
+        # the old YAML pane and keeping a failing resolver from breaking the tree.
+        return build_outline(OmegaConf.to_container(cfg, resolve=False)), ""
 
     # --- layout -----------------------------------------------------------
 
@@ -155,7 +258,8 @@ class Hydragen(App):  # type: ignore[misc]
                         initial_index=opts.index(self.selection[group]),
                     )
             with Vertical(id="right"):
-                yield Static(id="cfgpane")
+                yield ConfigTree("config", id="cfgpane")
+                yield Static(id="cfgerror")
                 yield Static(id="cmdline")
                 yield Input(placeholder="extra overrides, e.g.  db.user=me +debug=true")
                 yield RichLog(id="log", highlight=True, markup=False, wrap=True)
@@ -167,17 +271,55 @@ class Hydragen(App):  # type: ignore[misc]
 
     def refresh_config(self) -> None:
         overrides = self.current_overrides()
-        text, ok = self.compose_yaml(overrides)
-        pane = self.query_one("#cfgpane", Static)
-        if ok:
-            pane.update(Syntax(text, "yaml", theme="ansi_dark", word_wrap=True))
+        rows, error = self.compose_outline(overrides)
+        tree = self.query_one("#cfgpane", ConfigTree)
+        errpane = self.query_one("#cfgerror", Static)
+
+        tree.display = not error
+        errpane.display = bool(error)
+        if error:
+            errpane.update(f"compose failed\n\n{error}")
         else:
-            pane.update(f"compose failed\n\n{text}")
+            self._rebuild_tree(tree, rows)
+
         flag = " --multirun" if self.multirun else ""
         app_name = self.app_path.replace("\\", "/").rsplit("/", 1)[-1]
         self.query_one("#cmdline", Static).update(f"$ python {app_name}{flag} " + " ".join(overrides))
 
+    def _rebuild_tree(self, tree: ConfigTree, rows: tuple[Outline, ...]) -> None:
+        """Redraw the outline, keeping whatever the user had folded.
+
+        The pane recomposes on every keystroke, so rebuilding blindly would
+        re-open the whole tree while someone is typing.
+        """
+        cursor = tree.cursor_line
+        self._rebuilding = True
+        try:
+            tree.clear()
+            tree.root.data = ()
+            self._add_rows(tree.root, rows)
+            tree.root.expand()
+        finally:
+            self._rebuilding = False
+        tree.cursor_line = cursor  # clamped by Tree.validate_cursor_line
+
+    def _add_rows(self, node: TreeNode[ConfigPath], rows: tuple[Outline, ...]) -> None:
+        for row in rows:
+            if row.children:
+                child = node.add(row.label, row.path, expand=row.path not in self._collapsed)
+                self._add_rows(child, row.children)
+            else:
+                node.add_leaf(row.label, row.path)
+
     # --- events -----------------------------------------------------------
+
+    def on_tree_node_collapsed(self, event: Tree.NodeCollapsed[ConfigPath]) -> None:
+        if not self._rebuilding and event.node.data is not None:
+            self._collapsed.add(event.node.data)
+
+    def on_tree_node_expanded(self, event: Tree.NodeExpanded[ConfigPath]) -> None:
+        if not self._rebuilding and event.node.data is not None:
+            self._collapsed.discard(event.node.data)
 
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
         group = (event.list_view.id or "")[2:]
@@ -197,6 +339,26 @@ class Hydragen(App):  # type: ignore[misc]
     def action_toggle_multirun(self) -> None:
         self.multirun = not self.multirun
         self.refresh_config()
+
+    def action_focus_config(self) -> None:
+        """Toggle between the config outline and wherever focus was before it.
+
+        The sidebar contributes one tab stop per config group, so tabbing to the
+        outline and back gets long in a project with many groups.
+        """
+        tree = self.query_one("#cfgpane", ConfigTree)
+        if self.focused is tree:
+            target = self._focus_before_config
+            if target is None or not target.is_attached:
+                target = self._first_group_list()
+            if target is not None:
+                target.focus()
+        elif tree.display:  # nothing to focus while the error pane is up
+            self._focus_before_config = self.focused
+            tree.focus()
+
+    def _first_group_list(self) -> ListView | None:
+        return self.query_one(f"#g-{self.groups[0]}", ListView) if self.groups else None
 
     def action_clear_log(self) -> None:
         self.query_one("#log", RichLog).clear()
