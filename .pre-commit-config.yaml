@@ -16,21 +16,21 @@ repos:
     hooks:
       - id: pytest
         name: pytest
-        entry: pytest -q
+        entry: bash -c 'PATH="$PWD/.venv/bin:$PATH" exec pytest -q'
         language: system
         pass_filenames: false
         always_run: true
 
       - id: vulture
         name: vulture
-        entry: vulture . vulture_whitelist.py
+        entry: bash -c 'PATH="$PWD/.venv/bin:$PATH" exec vulture hydra_plugins tests vulture_whitelist.py'
         language: system
         pass_filenames: false
         always_run: true
 
       - id: duplicate-code
         name: duplicate-code
-        entry: pylint --disable=all --enable=duplicate-code .
+        entry: bash -c 'PATH="$PWD/.venv/bin:$PATH" exec pylint --disable=all --enable=duplicate-code hydra_plugins tests'
         language: system
         pass_filenames: false
         always_run: true

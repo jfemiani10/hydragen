@@ -19,7 +19,7 @@ from hydra.types import HydraContext, RunMode
 from omegaconf import DictConfig, OmegaConf, open_dict
 from textual import work
 from textual.app import App, ComposeResult
-from textual.binding import Binding, BindingType
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widget import Widget
 from textual.widgets import (
