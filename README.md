@@ -53,6 +53,7 @@ On Windows, run Hydragen from Windows Terminal. Textual renders poorly in the le
 * Lists every configuration group and option exposed by the running application’s `ConfigLoader`, allowing it to adapt to any Hydra project without additional configuration.
 * Recomposes the configuration as you move through options using `load_configuration()`, the same mechanism used by `@hydra.main`.
 * Shows the resolved configuration as a collapsible outline, so nested groups can be folded away while inspecting a large config. Folds are preserved as you change options.
+* Lets you edit any value directly in the outline. The edit becomes a real Hydra override, listed in its own pane and shown in the command preview, and the outline strikes out the value it replaced. Editing the same node again updates that override rather than stacking another one.
 * Shows the exact `python my_app.py ...` command represented by the current selection, so the interface teaches Hydra’s command-line syntax instead of hiding it.
 * Displays composition errors, including invalid types and unknown keys, in the interface instead of crashing.
 * Launches the selected job in a subprocess and streams its output.
@@ -67,6 +68,9 @@ On Windows, run Hydragen from Windows Terminal. Textual renders poorly in the le
 | `↑` / `↓`  | Move through the outline (once focused) |
 | `→`        | Expand the selected config node       |
 | `←`        | Collapse the selected config node     |
+| `enter`    | Edit the selected value, or fold a group |
+| `esc`      | Cancel the edit in progress           |
+| `delete`   | Remove the highlighted generated override |
 | `r`        | Run the composed job                  |
 | `m`        | Toggle `--multirun`                   |
 | `x`        | Clear the log pane                    |
